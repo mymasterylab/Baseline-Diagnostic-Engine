@@ -1,0 +1,6 @@
+{
+  "name": "MyMasteryLab Baseline Assessment Engine",
+  "description": "A production-ready, enterprise-grade diagnostic engine for Grades 1-9. Features multi-curriculum alignments (US/UK), dynamic procedural question generation, parent/teacher dashboards, and live Data synchronization.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
