@@ -100,42 +100,161 @@ export default function TeacherDashboard({
       'Email',
       'Grade',
       'Curriculum',
+      'Question ID',
       'Category',
       'Subcategory',
-      'Question ID',
+      'Standard Code',
       'Difficulty',
       'Question Type',
-      'Question',
+      'Question Text',
+      'Hint',
+      'Explanation',
+      'Estimated Time (s)',
+      'Bloom Level',
+      'Tags',
+      'Skill ID',
+      'Concept ID',
+      'Lesson',
+      'Topic',
+      'Learning Objective',
+      'Solution',
+      'Step-by-Step Explanation',
+      'Common Misconception',
+      'Skills Tested',
+      'Prerequisite Concepts',
+      'Options',
       'Correct Answer',
       'Student Response',
       'Correct/Wrong',
+      'Marks',
       'Time Taken (s)',
+      'Confidence Rating',
+      'Skipped',
       'Overall Score',
-      'Percentage'
+      'Overall Percentage',
+      'Accuracy',
+      'Average Time Per Question',
+      'Total Solve Time',
+      'Fastest Category',
+      'Slowest Category',
+      'Easy Accuracy (%)',
+      'Medium Accuracy (%)',
+      'Hard Accuracy (%)',
+      'Skipped Count',
+      'Guess Probability (%)',
+      'Mastery Level',
+      'Learning Velocity',
+      'Readiness Score',
+      'Confidence Index',
+      'Recommended Starting Grade',
+      'Recommended Starting Unit',
+      'Recommended Lessons',
+      'Learning Gaps',
+      'Strongest Skills',
+      'Weakest Skills',
+      'Fluency Score (%)',
+      'Reasoning Score (%)',
+      'Computational Score (%)',
+      'Geometry Score (%)',
+      'Fractions Score (%)',
+      'Number Sense Score (%)'
     ];
 
-    const rows = responses.map((res) => [
-      student.date,
-      student.assessmentId,
-      student.name,
-      student.email,
-      `Grade ${student.grade}`,
-      student.curriculum,
-      res.category,
-      res.subcategory,
-      res.questionId,
-      res.difficulty,
-      res.type,
-      res.questionText.replace(/,/g, ' '),
-      String(res.correctAnswer).replace(/,/g, ' '),
-      String(res.studentAnswer).replace(/,/g, ' '),
-      res.isCorrect ? 'Correct' : 'Wrong',
-      res.timeTaken,
-      report.overallScore,
-      `${report.overallPercentage}%`
-    ]);
+    const escapeCSV = (val: any) => {
+      const str = val !== undefined && val !== null ? String(val) : '';
+      return `"${str.replace(/"/g, '""')}"`;
+    };
 
-    const csvContent = 'data:text/csv;charset=utf-8,' 
+    const rows = responses.map((res) => {
+      const q = rawQuestions.find(item => item.id === res.questionId);
+      
+      const qHint = q?.hint || '';
+      const qExpl = q?.explanation || '';
+      const qEstTime = q?.estimatedTime || 0;
+      const qBloom = q?.bloomLevel || '';
+      const qTags = q?.tags ? q.tags.join(', ') : '';
+      const qSkillId = q?.skillId || '';
+      const qConceptId = q?.conceptId || '';
+      const qLesson = q?.lesson || '';
+      const qTopic = q?.topic || '';
+      const qObjective = q?.learningObjective || '';
+      const qSolution = q?.solution || '';
+      const qStepExpl = q?.stepByStepExplanation || '';
+      const qMisconception = q?.commonMisconception || '';
+      const qSkillsTested = q?.skillsTested ? q.skillsTested.join(', ') : '';
+      const qPrereqs = q?.prerequisiteConcepts ? q.prerequisiteConcepts.join(', ') : '';
+      const qOptions = q?.options ? q.options.join(' | ') : '';
+      const qStandardCode = q?.standardCode || '';
+
+      return [
+        escapeCSV(student.date),
+        escapeCSV(student.assessmentId),
+        escapeCSV(student.name),
+        escapeCSV(student.email),
+        escapeCSV(`Grade ${student.grade}`),
+        escapeCSV(student.curriculum),
+        escapeCSV(res.questionId),
+        escapeCSV(res.category),
+        escapeCSV(res.subcategory),
+        escapeCSV(qStandardCode),
+        escapeCSV(res.difficulty),
+        escapeCSV(res.type),
+        escapeCSV(res.questionText),
+        escapeCSV(qHint),
+        escapeCSV(qExpl),
+        escapeCSV(qEstTime),
+        escapeCSV(qBloom),
+        escapeCSV(qTags),
+        escapeCSV(qSkillId),
+        escapeCSV(qConceptId),
+        escapeCSV(qLesson),
+        escapeCSV(qTopic),
+        escapeCSV(qObjective),
+        escapeCSV(qSolution),
+        escapeCSV(qStepExpl),
+        escapeCSV(qMisconception),
+        escapeCSV(qSkillsTested),
+        escapeCSV(qPrereqs),
+        escapeCSV(qOptions),
+        escapeCSV(res.correctAnswer),
+        escapeCSV(res.studentAnswer),
+        escapeCSV(res.isCorrect ? 'Correct' : 'Wrong'),
+        escapeCSV(res.isCorrect ? 1 : 0),
+        escapeCSV(res.timeTaken),
+        escapeCSV(res.confidence || 'Medium'),
+        escapeCSV(res.skipped ? 'Yes' : 'No'),
+        escapeCSV(report.overallScore),
+        escapeCSV(report.overallPercentage),
+        escapeCSV(report.accuracy),
+        escapeCSV(report.averageTimePerQuestion),
+        escapeCSV(report.totalTime),
+        escapeCSV(report.fastestCategory),
+        escapeCSV(report.slowestCategory),
+        escapeCSV(report.difficultyAccuracy.Easy),
+        escapeCSV(report.difficultyAccuracy.Medium),
+        escapeCSV(report.difficultyAccuracy.Hard),
+        escapeCSV(report.skippedCount),
+        escapeCSV(Math.round(report.guessProbability * 100)),
+        escapeCSV(report.masteryLevel),
+        escapeCSV(report.learningVelocity),
+        escapeCSV(report.readinessScore),
+        escapeCSV(report.confidenceIndex),
+        escapeCSV(report.recommendedStartingGrade),
+        escapeCSV(report.recommendedStartingUnit),
+        escapeCSV(report.recommendedLessons ? report.recommendedLessons.join(', ') : ''),
+        escapeCSV(report.learningGaps ? report.learningGaps.join(' | ') : ''),
+        escapeCSV(report.strongestSkills ? report.strongestSkills.join(' | ') : ''),
+        escapeCSV(report.weakestSkills ? report.weakestSkills.join(' | ') : ''),
+        escapeCSV(report.fluencyScore),
+        escapeCSV(report.reasoningScore),
+        escapeCSV(report.computationalScore),
+        escapeCSV(report.geometryScore),
+        escapeCSV(report.fractionsScore),
+        escapeCSV(report.numberSenseScore)
+      ];
+    });
+
+    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' 
       + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
     
     const encodedUri = encodeURI(csvContent);

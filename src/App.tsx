@@ -9,7 +9,8 @@ import { createRandomizedAssessmentPaper } from './data/questionGenerator';
 import QuestionRenderer from './components/QuestionRenderer';
 import ParentDashboard from './components/ParentDashboard';
 import TeacherDashboard from './components/TeacherDashboard';
-import { Award, Compass, Play, ArrowLeft, ArrowRight, Save, Clipboard, RefreshCw, Layers, CheckCircle2, AlertCircle } from 'lucide-react';
+import ReportRegenerator from './components/ReportRegenerator';
+import { Award, Compass, Play, ArrowLeft, ArrowRight, Save, Clipboard, RefreshCw, Layers, CheckCircle2, AlertCircle, Settings, Sparkles } from 'lucide-react';
 
 const LOCAL_STORAGE_KEY = 'mymasterylab_baseline_state';
 const WEBHOOK_URL_KEY = 'mymasterylab_sheets_webhook';
@@ -29,9 +30,11 @@ export default function App() {
   // Modal states for iframe safety
   const [showSubmitConfirm, setShowSubmitConfirm] = useState<boolean>(false);
   const [showResetConfirm, setShowResetConfirm] = useState<boolean>(false);
+  const [showSyncConfigModal, setShowSyncConfigModal] = useState<boolean>(false);
   
   // Dashboard state
-  const [activeTab, setActiveTab] = useState<'parent' | 'teacher'>('parent');
+  const [activeTab, setActiveTab] = useState<'parent' | 'teacher' | 'regenerate'>('parent');
+  const [onboardingTab, setOnboardingTab] = useState<'onboard' | 'regenerate'>('onboard');
   
   // Onboarding form state
   const [formName, setFormName] = useState('');
@@ -207,22 +210,18 @@ export default function App() {
     if (!student || !urlToUse) return;
 
     setSyncStatus('pending');
-    setSyncMessage('Transmitting diagnostic scores to Google Sheets...');
+    setSyncMessage('Transmitting diagnostic scores for Data Synchronization...');
 
     try {
-      // Loop and transmit one row per question
-      let successCount = 0;
-
-      for (let i = 0; i < paper.length; i++) {
-        const q = paper[i];
+      // Dispatch all row transmissions in parallel
+      const promises = paper.map(async (q) => {
         const ans = answers[q.id];
         const isCorrect = evaluateResponse(q, ans);
         const qTime = questionTimers[q.id] || 0;
-        
-        // Match specific category score for diagnostic mapping
-        const catScore = finalReport.categoryScores[q.category] || { percentage: 0, mastery: 'Emerging' };
+        const confidence = confidenceRatings[q.id] || 'Medium';
 
         const payload = {
+          // 1. Original / camelCase properties for complete backward-compatibility
           timestamp: student.date,
           assessmentId: student.assessmentId,
           studentName: student.name,
@@ -231,35 +230,109 @@ export default function App() {
           curriculum: student.curriculum,
           category: q.category,
           subcategory: q.subcategory,
-          standard: q.standardCode,
+          standard: q.standardCode || '',
+          standardCode: q.standardCode || '',
           questionId: q.id,
           difficulty: q.difficulty,
           questionType: q.type,
           question: q.text,
+          questionText: q.text,
           correctAnswer: Array.isArray(q.correctAnswer) ? q.correctAnswer.join(', ') : String(q.correctAnswer),
           studentResponse: ans !== undefined ? (Array.isArray(ans) ? ans.join(', ') : String(ans)) : 'Skipped/No Answer',
           correctOrWrong: isCorrect ? 'Correct' : 'Wrong',
           marks: isCorrect ? 1 : 0,
           timeTaken: qTime,
+          timeTakenSeconds: qTime,
           overallScore: finalReport.overallScore,
-          percentage: `${finalReport.overallPercentage}%`
+          percentage: `${finalReport.overallPercentage}%`,
+          overallPercentage: finalReport.overallPercentage,
+
+          // 2. Exact Space-Separated & Capitalized keys requested by the user
+          "Timestamp": student.date,
+          "Assessment ID": student.assessmentId,
+          "Student Name": student.name,
+          "Email": student.email,
+          "Grade": `Grade ${student.grade}`,
+          "Curriculum": student.curriculum,
+          "Category": q.category,
+          "Subcategory": q.subcategory,
+          "Standard": q.standardCode || '',
+          "Question ID": q.id,
+          "Difficulty": q.difficulty,
+          "Question Type": q.type,
+          "Question": q.text,
+          "Correct Answer": Array.isArray(q.correctAnswer) ? q.correctAnswer.join(', ') : String(q.correctAnswer),
+          "Student Response": ans !== undefined ? (Array.isArray(ans) ? ans.join(', ') : String(ans)) : 'Skipped/No Answer',
+          "Correct/Wrong": isCorrect ? 'Correct' : 'Wrong',
+          "Marks": isCorrect ? 1 : 0,
+          "Time Taken": qTime,
+          "Overall Score": finalReport.overallScore,
+          "Percentage": `${finalReport.overallPercentage}%`,
+
+          // 3. Fully enriched metadata to allow full regeneration of the diagnostic report
+          hint: q.hint || '',
+          explanation: q.explanation || '',
+          estimatedTime: q.estimatedTime || 0,
+          bloomLevel: q.bloomLevel || '',
+          tags: q.tags ? q.tags.join(', ') : '',
+          skillId: q.skillId || '',
+          conceptId: q.conceptId || '',
+          lesson: q.lesson || '',
+          topic: q.topic || '',
+          learningObjective: q.learningObjective || '',
+          solution: q.solution || '',
+          stepByStepExplanation: q.stepByStepExplanation || '',
+          commonMisconception: q.commonMisconception || '',
+          skillsTested: q.skillsTested ? q.skillsTested.join(', ') : '',
+          prerequisiteConcepts: q.prerequisiteConcepts ? q.prerequisiteConcepts.join(', ') : '',
+          options: q.options ? q.options.join(' | ') : '',
+          confidenceRating: confidence,
+          skipped: ans !== undefined ? 'No' : 'Yes',
+
+          accuracy: finalReport.accuracy,
+          averageTimePerQuestion: finalReport.averageTimePerQuestion,
+          totalTime: finalReport.totalTime,
+          fastestCategory: finalReport.fastestCategory,
+          slowestCategory: finalReport.slowestCategory,
+          easyAccuracy: finalReport.difficultyAccuracy.Easy,
+          mediumAccuracy: finalReport.difficultyAccuracy.Medium,
+          hardAccuracy: finalReport.difficultyAccuracy.Hard,
+          skippedCount: finalReport.skippedCount,
+          guessProbability: finalReport.guessProbability,
+          masteryLevel: finalReport.masteryLevel,
+          learningVelocity: finalReport.learningVelocity,
+          readinessScore: finalReport.readinessScore,
+          confidenceIndex: finalReport.confidenceIndex,
+          recommendedStartingGrade: String(finalReport.recommendedStartingGrade),
+          recommendedStartingUnit: finalReport.recommendedStartingUnit,
+          recommendedLessons: finalReport.recommendedLessons ? finalReport.recommendedLessons.join(', ') : '',
+          learningGaps: finalReport.learningGaps ? finalReport.learningGaps.join(' | ') : '',
+          strongestSkills: finalReport.strongestSkills ? finalReport.strongestSkills.join(' | ') : '',
+          weakestSkills: finalReport.weakestSkills ? finalReport.weakestSkills.join(' | ') : '',
+          
+          // Domain Breakdown Scores
+          fluencyScore: finalReport.fluencyScore,
+          reasoningScore: finalReport.reasoningScore,
+          computationalScore: finalReport.computationalScore,
+          geometryScore: finalReport.geometryScore,
+          fractionsScore: finalReport.fractionsScore,
+          numberSenseScore: finalReport.numberSenseScore
         };
 
-        // Transmit row POST to the Web App
-        const res = await fetch(urlToUse, {
+        return fetch(urlToUse, {
           method: 'POST',
           mode: 'no-cors', // standard Apps Script CORS requirement
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-        
-        successCount++;
-      }
+      });
+
+      await Promise.all(promises);
 
       setSyncStatus('synced');
-      setSyncMessage(`All ${successCount} item rows successfully synchronized with your spreadsheet!`);
+      setSyncMessage(`All ${paper.length} item rows successfully synchronized for Data Synchronization!`);
     } catch (err: any) {
-      console.error('Webhook sheet sync error:', err);
+      console.error('Data sync error:', err);
       setSyncStatus('failed');
       setSyncMessage(`Failed to synchronize: ${err.message}. Progress is saved locally.`);
     }
@@ -302,6 +375,31 @@ export default function App() {
     
     // Calculate final psychometric outcomes
     const finalReport = calculateDiagnosticReport();
+    
+    // Save to completed history for persistent local lookup / report regeneration
+    if (student) {
+      try {
+        const historyJson = localStorage.getItem('mymasterylab_completed_history');
+        const history = historyJson ? JSON.parse(historyJson) : [];
+        const filtered = history.filter((item: any) => 
+          !(item.student?.name?.toLowerCase().trim() === student.name.toLowerCase().trim() && 
+            item.student?.email?.toLowerCase().trim() === student.email.toLowerCase().trim() && 
+            Number(item.student?.grade) === Number(student.grade))
+        );
+        filtered.push({
+          student,
+          paper,
+          answers,
+          confidenceRatings,
+          questionTimers,
+          report: finalReport,
+          timestamp: new Date().toISOString()
+        });
+        localStorage.setItem('mymasterylab_completed_history', JSON.stringify(filtered));
+      } catch (e) {
+        console.error("Failed to save completed assessment to local history cache:", e);
+      }
+    }
     
     // Trigger Webhook Sheets Sync automatically on completion
     const targetUrl = scriptUrl || 'https://script.google.com/macros/s/AKfycbzIA9I8YNitTs0XeZrTHLTzWSuifHTTfYqK6g4nGatcnQ2bc6pA9a8xMKaLSBr4lGy50w/exec';
@@ -589,6 +687,13 @@ export default function App() {
             {syncStatus === 'synced' ? '✓ Data synchronized' : syncStatus === 'pending' ? 'Syncing items...' : 'Connected Endpoint'}
           </p>
         )}
+        <button
+          type="button"
+          onClick={() => setShowSyncConfigModal(true)}
+          className="mt-3.5 w-full py-2 px-3 bg-white/10 hover:bg-white/20 text-[#C3EAED] hover:text-white rounded-xl text-[10px] font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+        >
+          <Settings className="w-3.5 h-3.5" /> Configure Data Sync URL
+        </button>
       </div>
     );
 
@@ -746,148 +851,194 @@ export default function App() {
             {/* PAGE 1: STUDENT DETAILS ONBOARDING */}
             {!student && (
               <div id="onboarding-form-card" className="w-full max-w-3xl mx-auto flex flex-col gap-6">
-                <div className="space-y-2 mb-4">
-                  <h2 className="font-sans text-2xl font-black text-[#0B6162]">Student Onboarding</h2>
-                  <p className="text-sm text-slate-500">Please enter the learner's details to initialize the diagnostic baseline engine.</p>
+                
+                {/* Onboarding Mode Tab Selector */}
+                <div className="bg-slate-100 border border-slate-200/60 rounded-2xl p-1.5 flex gap-1.5 self-start w-full sm:w-auto">
+                  <button
+                    id="btn-onboard-tab"
+                    type="button"
+                    onClick={() => setOnboardingTab('onboard')}
+                    className={`flex-1 sm:flex-initial py-2.5 px-4 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                      onboardingTab === 'onboard'
+                        ? 'bg-[#0B6162] text-white shadow-sm font-extrabold'
+                        : 'text-slate-500 hover:text-[#0B6162] hover:bg-slate-200/50'
+                    }`}
+                  >
+                    <Play className="w-3.5 h-3.5 fill-current" /> Initialize Assessment
+                  </button>
+                  <button
+                    id="btn-regenerate-tab"
+                    type="button"
+                    onClick={() => setOnboardingTab('regenerate')}
+                    className={`flex-1 sm:flex-initial py-2.5 px-4 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                      onboardingTab === 'regenerate'
+                        ? 'bg-[#0B6162] text-white shadow-sm font-extrabold'
+                        : 'text-slate-500 hover:text-[#0B6162] hover:bg-slate-200/50'
+                    }`}
+                  >
+                    <Sparkles className="w-3.5 h-3.5" /> Generate Report
+                  </button>
                 </div>
 
-                <form onSubmit={handleStartOnboarding} className="space-y-6 flex-1">
-                  {formError && (
-                    <div id="onboarding-error-box" className="p-4 bg-rose-50 border border-rose-100 rounded-2xl text-xs text-rose-700 flex items-center gap-2 font-semibold">
-                      <AlertCircle className="w-4 h-4 shrink-0" />
-                      <span>{formError}</span>
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Student Name */}
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-bold text-[#0B6162] uppercase tracking-wider">
-                        Student Full Name *
-                      </label>
-                      <input
-                        id="onboarding-student-name"
-                        type="text"
-                        placeholder="e.g. Charlie Brown"
-                        value={formName}
-                        onChange={(e) => setFormName(e.target.value)}
-                        className="w-full px-4 py-3.5 rounded-2xl border-2 border-slate-200 focus:border-[#D05C15] outline-none text-sm transition-all bg-white hover:border-slate-300"
-                      />
+                {onboardingTab === 'onboard' ? (
+                  <>
+                    <div className="space-y-2 mb-4">
+                      <h2 className="font-sans text-2xl font-black text-[#0B6162]">Student Onboarding</h2>
+                      <p className="text-sm text-slate-500">Please enter the learner's details to initialize the diagnostic baseline engine.</p>
                     </div>
 
-                    {/* Email Address */}
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-bold text-[#0B6162] uppercase tracking-wider">
-                        Parent / Teacher Email *
-                      </label>
-                      <input
-                        id="onboarding-student-email"
-                        type="email"
-                        placeholder="e.g. parent@example.com"
-                        value={formEmail}
-                        onChange={(e) => setFormEmail(e.target.value)}
-                        className="w-full px-4 py-3.5 rounded-2xl border-2 border-slate-200 focus:border-[#D05C15] outline-none text-sm transition-all bg-white hover:border-slate-300"
-                      />
-                    </div>
+                    <form onSubmit={handleStartOnboarding} className="space-y-6 flex-1">
+                      {formError && (
+                        <div id="onboarding-error-box" className="p-4 bg-rose-50 border border-rose-100 rounded-2xl text-xs text-rose-700 flex items-center gap-2 font-semibold">
+                          <AlertCircle className="w-4 h-4 shrink-0" />
+                          <span>{formError}</span>
+                        </div>
+                      )}
 
-                    {/* Grade Dropdown */}
-                    <div className="flex flex-col col-span-1 md:col-span-2 gap-1.5">
-                      <label className="text-xs font-bold text-[#0B6162] uppercase tracking-wider">
-                        Select Grade Level *
-                      </label>
-                      <select
-                        id="onboarding-student-grade"
-                        value={formGrade}
-                        onChange={(e) => setFormGrade(Number(e.target.value) as Grade)}
-                        className="w-full px-4 py-3.5 rounded-2xl border-2 border-slate-200 focus:border-[#D05C15] outline-none text-sm transition-all bg-white cursor-pointer hover:border-slate-300"
-                      >
-                        <option value="">-- Choose Grade level --</option>
-                        {Array.from({ length: 9 }).map((_, i) => (
-                          <option key={i + 1} value={i + 1}>
-                            Grade {i + 1} (Ages {i + 6}-{i + 7})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* Curriculum Selection Cards */}
-                    <div className="col-span-1 md:col-span-2 space-y-3">
-                      <label className="text-xs font-bold text-[#0B6162] uppercase tracking-wider block">
-                        Select Curriculum Pathway *
-                      </label>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        {/* Option 1: US */}
-                        <label className="cursor-pointer group">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Student Name */}
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-xs font-bold text-[#0B6162] uppercase tracking-wider">
+                            Student Full Name *
+                          </label>
                           <input
-                            type="radio"
-                            name="pathway"
-                            value="US"
-                            checked={formCurriculum === 'US'}
-                            onChange={() => setFormCurriculum('US')}
-                            className="sr-only"
+                            id="onboarding-student-name"
+                            type="text"
+                            placeholder="e.g. Charlie Brown"
+                            value={formName}
+                            onChange={(e) => setFormName(e.target.value)}
+                            className="w-full px-4 py-3.5 rounded-2xl border-2 border-slate-200 focus:border-[#D05C15] outline-none text-sm transition-all bg-white hover:border-slate-300"
                           />
-                          <div className={`p-4 border-2 rounded-2xl bg-white transition-all flex items-center gap-4 hover:border-slate-300 ${
-                            formCurriculum === 'US'
-                              ? 'border-[#D05C15] bg-[#FFE6D9]/40 ring-2 ring-[#D05C15]/15'
-                              : 'border-slate-200'
-                          }`}>
-                            <div className="text-3xl">🇺🇸</div>
-                            <div>
-                               <div className="font-bold text-[#D05C15]">US Curriculum</div>
-                              <div className="text-[10px] text-slate-500 uppercase font-mono mt-0.5">CCSS • State Expectations</div>
-                            </div>
-                          </div>
-                        </label>
+                        </div>
 
-                        {/* Option 2: UK_EUROPE */}
-                        <label className="cursor-pointer group">
+                        {/* Email Address */}
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-xs font-bold text-[#0B6162] uppercase tracking-wider">
+                            Parent / Teacher Email *
+                          </label>
                           <input
-                            type="radio"
-                            name="pathway"
-                            value="UK_EUROPE"
-                            checked={formCurriculum === 'UK_EUROPE'}
-                            onChange={() => setFormCurriculum('UK_EUROPE')}
-                            className="sr-only"
+                            id="onboarding-student-email"
+                            type="text"
+                            placeholder="e.g. parent@example.com"
+                            value={formEmail}
+                            onChange={(e) => setFormEmail(e.target.value)}
+                            className="w-full px-4 py-3.5 rounded-2xl border-2 border-slate-200 focus:border-[#D05C15] outline-none text-sm transition-all bg-white hover:border-slate-300"
                           />
-                          <div className={`p-4 border-2 rounded-2xl bg-white transition-all flex items-center gap-4 hover:border-slate-300 ${
-                            formCurriculum === 'UK_EUROPE'
-                              ? 'border-[#D05C15] bg-[#FFE6D9]/40 ring-2 ring-[#D05C15]/15'
-                              : 'border-slate-200'
-                          }`}>
-                            <div className="text-3xl">🇬🇧</div>
-                            <div>
-                               <div className="font-bold text-[#D05C15]">UK & Europe</div>
-                              <div className="text-[10px] text-slate-500 uppercase font-mono mt-0.5">England Key Stages • IB • Edexcel</div>
-                            </div>
+                        </div>
+
+                        {/* Grade Dropdown */}
+                        <div className="flex flex-col col-span-1 md:col-span-2 gap-1.5">
+                          <label className="text-xs font-bold text-[#0B6162] uppercase tracking-wider">
+                            Select Grade Level *
+                          </label>
+                          <select
+                            id="onboarding-student-grade"
+                            value={formGrade}
+                            onChange={(e) => setFormGrade(Number(e.target.value) as Grade)}
+                            className="w-full px-4 py-3.5 rounded-2xl border-2 border-slate-200 focus:border-[#D05C15] outline-none text-sm transition-all bg-white cursor-pointer hover:border-slate-300"
+                          >
+                            <option value="">-- Choose Grade level --</option>
+                            {Array.from({ length: 9 }).map((_, i) => (
+                              <option key={i + 1} value={i + 1}>
+                                Grade {i + 1} (Ages {i + 6}-{i + 7})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Curriculum Selection Cards */}
+                        <div className="col-span-1 md:col-span-2 space-y-3">
+                          <label className="text-xs font-bold text-[#0B6162] uppercase tracking-wider block">
+                            Select Curriculum Pathway *
+                          </label>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {/* Option 1: US */}
+                            <label className="cursor-pointer group">
+                              <input
+                                type="radio"
+                                name="pathway"
+                                value="US"
+                                checked={formCurriculum === 'US'}
+                                onChange={() => setFormCurriculum('US')}
+                                className="sr-only"
+                              />
+                              <div className={`p-4 border-2 rounded-2xl bg-white transition-all flex items-center gap-4 hover:border-slate-300 ${
+                                formCurriculum === 'US'
+                                  ? 'border-[#D05C15] bg-[#FFE6D9]/40 ring-2 ring-[#D05C15]/15'
+                                  : 'border-slate-200'
+                              }`}>
+                                <div className="text-3xl">🇺🇸</div>
+                                <div>
+                                  <div className="font-bold text-[#D05C15]">US Curriculum</div>
+                                  <div className="text-[10px] text-slate-500 uppercase font-mono mt-0.5">CCSS • State Expectations</div>
+                                </div>
+                              </div>
+                            </label>
+
+                            {/* Option 2: UK_EUROPE */}
+                            <label className="cursor-pointer group">
+                              <input
+                                type="radio"
+                                name="pathway"
+                                value="UK_EUROPE"
+                                checked={formCurriculum === 'UK_EUROPE'}
+                                onChange={() => setFormCurriculum('UK_EUROPE')}
+                                className="sr-only"
+                              />
+                              <div className={`p-4 border-2 rounded-2xl bg-white transition-all flex items-center gap-4 hover:border-slate-300 ${
+                                formCurriculum === 'UK_EUROPE'
+                                  ? 'border-[#D05C15] bg-[#FFE6D9]/40 ring-2 ring-[#D05C15]/15'
+                                  : 'border-slate-200'
+                              }`}>
+                                <div className="text-3xl">🇬🇧</div>
+                                <div>
+                                  <div className="font-bold text-[#D05C15]">UK & Europe</div>
+                                  <div className="text-[10px] text-slate-500 uppercase font-mono mt-0.5">England Key Stages • IB • Edexcel</div>
+                                </div>
+                              </div>
+                            </label>
                           </div>
-                        </label>
+                        </div>
                       </div>
-                    </div>
-                  </div>
 
-                  {/* Bottom buttons / metadata alignment */}
-                  <div className="pt-6 border-t border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4 mt-6">
-                    <div className="flex gap-3">
-                      <div className="px-3.5 py-1.5 bg-white rounded-lg border border-slate-200 flex items-center gap-2 shadow-sm">
-                        <div className="w-2 h-2 bg-emerald-500 rounded-full" />
-                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Engine Active</span>
-                      </div>
-                      <div className="px-3.5 py-1.5 bg-white rounded-lg border border-slate-200 flex items-center gap-2 shadow-sm">
-                        <div className="w-2 h-2 bg-[#D05C15] rounded-full" />
-                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Adaptive v4.2</span>
-                      </div>
-                    </div>
+                      {/* Bottom buttons / metadata alignment */}
+                      <div className="pt-6 border-t border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4 mt-6">
+                        <div className="flex gap-3">
+                          <div className="px-3.5 py-1.5 bg-white rounded-lg border border-slate-200 flex items-center gap-2 shadow-sm">
+                            <div className="w-2 h-2 bg-emerald-500 rounded-full" />
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Engine Active</span>
+                          </div>
+                          <div className="px-3.5 py-1.5 bg-white rounded-lg border border-slate-200 flex items-center gap-2 shadow-sm">
+                            <div className="w-2 h-2 bg-[#D05C15] rounded-full" />
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Adaptive v4.2</span>
+                          </div>
+                        </div>
 
-                    <button
-                      id="btn-onboarding-start"
-                      type="submit"
-                      className="px-8 py-3.5 bg-gradient-to-r from-[#D05C15] to-[#F7941D] hover:from-[#F7941D] hover:to-[#FFA07A] text-white font-sans font-bold text-sm rounded-2xl shadow-lg shadow-[#D05C15]/10 transition-all flex items-center gap-2.5 cursor-pointer hover:scale-[1.01] active:scale-100"
-                    >
-                      <Play className="w-4 h-4 fill-white" />
-                      <span>Initialize Assessment</span>
-                    </button>
-                  </div>
-                </form>
+                        <button
+                          id="btn-onboarding-start"
+                          type="submit"
+                          className="px-8 py-3.5 bg-gradient-to-r from-[#D05C15] to-[#F7941D] hover:from-[#F7941D] hover:to-[#FFA07A] text-white font-sans font-bold text-sm rounded-2xl shadow-lg shadow-[#D05C15]/10 transition-all flex items-center gap-2.5 cursor-pointer hover:scale-[1.01] active:scale-100"
+                        >
+                          <Play className="w-4 h-4 fill-white" />
+                          <span>Initialize Assessment</span>
+                        </button>
+                      </div>
+                    </form>
+                  </>
+                ) : (
+                  <ReportRegenerator
+                    scriptUrl={scriptUrl}
+                    onRegenerate={(std, pap, ans, conf, timer) => {
+                      setStudent(std);
+                      setPaper(pap);
+                      setAnswers(ans);
+                      setConfidenceRatings(conf);
+                      setQuestionTimers(timer);
+                      setIsCompleted(true);
+                      setActiveTab('parent');
+                    }}
+                  />
+                )}
               </div>
             )}
 
@@ -1033,6 +1184,17 @@ export default function App() {
                   >
                     <Layers className="w-4 h-4" /> Teacher Portal
                   </button>
+                  <button
+                    id="btn-view-regenerate"
+                    onClick={() => setActiveTab('regenerate')}
+                    className={`flex-1 py-2.5 px-4 text-center font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                      activeTab === 'regenerate'
+                        ? 'bg-[#D05C15] text-white shadow-md font-extrabold'
+                        : 'text-slate-500 hover:text-[#D05C15] hover:bg-slate-200/60'
+                    }`}
+                  >
+                    <Sparkles className="w-4 h-4" /> Generate Report
+                  </button>
                 </div>
 
                 {/* TAB PANELS */}
@@ -1080,6 +1242,23 @@ export default function App() {
                         rawQuestions={paper}
                         syncStatus={syncStatus}
                         syncMessage={syncMessage}
+                      />
+                    </div>
+                  )}
+
+                  {activeTab === 'regenerate' && (
+                    <div id="panel-regenerate-view" className="animate-fadeIn">
+                      <ReportRegenerator
+                        scriptUrl={scriptUrl}
+                        onRegenerate={(std, pap, ans, conf, timer) => {
+                          setStudent(std);
+                          setPaper(pap);
+                          setAnswers(ans);
+                          setConfidenceRatings(conf);
+                          setQuestionTimers(timer);
+                          setIsCompleted(true);
+                          setActiveTab('parent');
+                        }}
                       />
                     </div>
                   )}
@@ -1193,6 +1372,82 @@ export default function App() {
                 className="px-5 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-rose-600/10 cursor-pointer"
               >
                 Reset and Start New
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DATA SYNC CONFIGURATION MODAL (INTEGRATION FORM) */}
+      {showSyncConfigModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-lg w-full border border-slate-100 shadow-2xl">
+            <div className="flex items-center gap-3.5 mb-4">
+              <div className="p-3 bg-orange-50 text-[#D05C15] rounded-2xl">
+                <Settings className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-800">Data Synchronization Settings</h3>
+                <p className="text-xs text-slate-500">Configure your automated Google Sheets Web App Endpoint</p>
+              </div>
+            </div>
+
+            <div className="space-y-4 text-xs text-slate-600">
+              <p className="leading-relaxed">
+                Provide your custom Google Apps Script Web App URL below. When a student submits their assessment, their detailed row-by-row item responses will automatically sync to your sheet in real time.
+              </p>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-500 block">GOOGLE APPS SCRIPT WEB APP URL</label>
+                <input
+                  type="text"
+                  id="input-sync-webhook-url"
+                  placeholder="https://script.google.com/macros/s/.../exec"
+                  value={scriptUrl}
+                  onChange={(e) => setScriptUrl(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border-2 border-slate-200 focus:border-[#D05C15] rounded-xl outline-none font-mono text-xs transition-all"
+                />
+              </div>
+
+              <div className="bg-[#FFE6D9]/40 border border-[#D05C15]/10 rounded-2xl p-4 space-y-2">
+                <span className="font-bold text-[#D05C15] block">How to find your Web App URL:</span>
+                <ol className="list-decimal pl-4 space-y-1 text-[11px] leading-relaxed text-slate-700">
+                  <li>Open your Google Sheet bound container script.</li>
+                  <li>Click <strong>Deploy</strong> &gt; <strong>New deployment</strong> in Apps Script.</li>
+                  <li>Choose type <strong>Web app</strong>, authorize standard permissions.</li>
+                  <li>Copy the generated **Web app URL**, and paste it into the form above!</li>
+                </ol>
+              </div>
+            </div>
+
+            <div className="flex gap-3 justify-end mt-6">
+              <button
+                type="button"
+                onClick={() => {
+                  setScriptUrl('https://script.google.com/macros/s/AKfycbzIA9I8YNitTs0XeZrTHLTzWSuifHTTfYqK6g4nGatcnQ2bc6pA9a8xMKaLSBr4lGy50w/exec');
+                  localStorage.setItem(WEBHOOK_URL_KEY, 'https://script.google.com/macros/s/AKfycbzIA9I8YNitTs0XeZrTHLTzWSuifHTTfYqK6g4nGatcnQ2bc6pA9a8xMKaLSBr4lGy50w/exec');
+                }}
+                className="px-4 py-2.5 border border-slate-200 hover:border-slate-300 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-50 transition-all cursor-pointer mr-auto"
+              >
+                Reset Default
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowSyncConfigModal(false)}
+                className="px-4 py-2.5 border border-slate-200 hover:border-slate-300 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                id="btn-save-sync-webhook"
+                onClick={() => {
+                  localStorage.setItem(WEBHOOK_URL_KEY, scriptUrl);
+                  setShowSyncConfigModal(false);
+                }}
+                className="px-5 py-2.5 bg-[#D05C15] hover:bg-[#F7941D] text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-[#D05C15]/10 cursor-pointer"
+              >
+                Save Configuration
               </button>
             </div>
           </div>

@@ -64,6 +64,16 @@ export interface Question {
   tags: string[];
   skillId: string;
   conceptId: string;
+
+  // Strict Curriculum Alignment Fields
+  lesson: string;
+  topic: string;
+  learningObjective: string;
+  solution: string;
+  stepByStepExplanation: string;
+  commonMisconception: string;
+  skillsTested: string[];
+  prerequisiteConcepts: string[];
   
   // Type-specific properties
   options?: string[]; // For MCQ, Multiple Select

@@ -4,6 +4,8 @@
  */
 
 import { Question, Grade, CurriculumType, Difficulty, QuestionType, MatchingPair, HotspotArea } from '../types';
+import { generateUSQuestion } from './usCurriculumQuestions';
+import { generateUKQuestion } from './ukCurriculumQuestions';
 
 // Helper to generate a deterministic-like random selection or random range
 const randomElement = <T>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
@@ -90,6 +92,13 @@ function createProceduralQuestion(
   difficulty: Difficulty,
   index: number
 ): Question {
+  if (curriculum === 'US') {
+    return generateUSQuestion(id, grade, category, difficulty, index) as Question;
+  }
+  if (curriculum === 'UK_EUROPE') {
+    return generateUKQuestion(id, grade, category, difficulty, index) as Question;
+  }
+
   // Common placeholders
   const name1 = randomElement(NAMES);
   const name2 = NAMES.find(n => n !== name1) || 'Ben';
@@ -114,7 +123,7 @@ function createProceduralQuestion(
   let estimatedTime = 60; // seconds
 
   // Category routers
-  const isUS = curriculum === 'US';
+  const isUS = false;
 
   // Core Math Generator Logic by Category & Difficulty
   if (category.includes('Number Sense')) {
@@ -1055,18 +1064,28 @@ function createProceduralQuestion(
     correctAnswer = 'Option A';
   }
 
+  const details = getCurriculumDetails(
+    grade,
+    curriculum,
+    category,
+    subcategory,
+    difficulty,
+    correctAnswer,
+    explanation
+  );
+
   return {
     id,
     grade,
     curriculum,
     category,
-    subcategory,
-    standardCode,
+    subcategory: details.topic,
+    standardCode: details.standardCode || standardCode,
     difficulty,
     type,
     text,
     hint,
-    explanation,
+    explanation: details.stepByStepExplanation,
     estimatedTime,
     bloomLevel,
     tags,
@@ -1074,7 +1093,413 @@ function createProceduralQuestion(
     conceptId,
     options,
     correctAnswer,
-    visualData
+    visualData,
+    
+    // Strict Curriculum Alignment Fields
+    lesson: details.lesson,
+    topic: details.topic,
+    learningObjective: details.learningObjective,
+    solution: details.solution,
+    stepByStepExplanation: details.stepByStepExplanation,
+    commonMisconception: details.commonMisconception,
+    skillsTested: details.skillsTested,
+    prerequisiteConcepts: details.prerequisiteConcepts
+  };
+}
+
+// Curriculum-alignment Helper Function
+function getCurriculumDetails(
+  grade: Grade,
+  curriculum: CurriculumType,
+  category: string,
+  subcategory: string,
+  difficulty: Difficulty,
+  correctAnswer: any,
+  explanation: string
+) {
+  // Establish baseline default structures
+  let lesson = subcategory || 'Core Mathematical Practice';
+  let topic = category;
+  let learningObjective = `Master the concept of ${subcategory || category} at a ${difficulty} difficulty.`;
+  let solution = String(correctAnswer);
+  let stepByStepExplanation = explanation;
+  let commonMisconception = 'Failing to double check working or swapping operational order.';
+  let skillsTested = [category.toLowerCase().replace(/\s+/g, '-'), 'accuracy'];
+  let prerequisiteConcepts = ['foundational-counting', 'basic-arithmetic'];
+  let standardCode = '';
+
+  const isUS = curriculum === 'US';
+
+  if (isUS) {
+    if (grade === 1) {
+      if (category.includes('Number Sense')) {
+        standardCode = 'CCSS.Math.Content.1.NBT.B.2';
+        lesson = 'Understanding Place Value (Tens and Ones)';
+        topic = 'Number Sense & Place Value';
+        learningObjective = 'Understand that the two digits of a two-digit number represent amounts of tens and ones.';
+        commonMisconception = 'Confusing the position of tens and ones (e.g. interpreting 51 as 1 ten and 5 ones).';
+        skillsTested = ['place-value-identification', 'tens-and-ones'];
+        prerequisiteConcepts = ['counting-to-20'];
+      } else if (category.includes('Operations') || category.includes('Algebra')) {
+        standardCode = 'CCSS.Math.Content.1.OA.A.1';
+        lesson = 'Addition and Subtraction within 20';
+        topic = 'Operations & Algebraic Thinking';
+        learningObjective = 'Solve addition and subtraction word problems within 20 with unknowns in all positions.';
+        commonMisconception = 'Misapplying operation (e.g. adding when subtracting is required because of words like "more").';
+        skillsTested = ['equations-with-unknowns', 'add-sub-to-20'];
+        prerequisiteConcepts = ['counting-on'];
+      } else if (category.includes('Fraction') || category.includes('Rational')) {
+        standardCode = 'CCSS.Math.Content.1.G.A.3';
+        lesson = 'Partitioning Shapes into Halves & Fourths';
+        topic = 'Fractions, Decimals & Rational Numbers';
+        learningObjective = 'Partition circles and rectangles into two and four equal shares, describe the shares using halves, fourths, and quarters.';
+        commonMisconception = 'Believing split pieces represent fractions even when they are unequal in size.';
+        skillsTested = ['fraction-models', 'halves-and-fourths'];
+        prerequisiteConcepts = ['identifying-shapes'];
+      } else if (category.includes('Measurement') || category.includes('Data')) {
+        standardCode = 'CCSS.Math.Content.1.MD.B.3';
+        lesson = 'Telling Time to the Hour & Half-Hour';
+        topic = 'Measurement & Data';
+        learningObjective = 'Tell and write time in hours and half-hours using analog and digital clocks.';
+        commonMisconception = 'Confusing the long hand (minutes) with the short hand (hours).';
+        skillsTested = ['clock-reading', 'time-to-hour'];
+        prerequisiteConcepts = ['reading-numbers-1-12'];
+      }
+    } else if (grade === 2) {
+      if (category.includes('Number Sense')) {
+        standardCode = 'CCSS.Math.Content.2.NBT.A.1';
+        lesson = 'Three-Digit Place Value to 1,000';
+        topic = 'Number Sense & Place Value';
+        learningObjective = 'Understand that the three digits of a three-digit number represent amounts of hundreds, tens, and ones.';
+        commonMisconception = 'Writing 300405 for "three hundred forty-five" instead of 345.';
+        skillsTested = ['expanded-form', 'place-value-to-1000'];
+        prerequisiteConcepts = ['tens-and-ones'];
+      } else if (category.includes('Operations') || category.includes('Algebra')) {
+        standardCode = 'CCSS.Math.Content.2.NBT.B.5';
+        lesson = 'Addition & Subtraction within 1,000';
+        topic = 'Operations & Algebraic Thinking';
+        learningObjective = 'Fluently add and subtract within 100 using strategies based on place value.';
+        commonMisconception = 'Forgetting to carry over or borrow when performing column subtraction or addition.';
+        skillsTested = ['column-addition', 'regrouping'];
+        prerequisiteConcepts = ['addition-within-20'];
+      } else if (category.includes('Fraction') || category.includes('Rational')) {
+        standardCode = 'CCSS.Math.Content.2.G.A.3';
+        lesson = 'Partitioning into Halves, Thirds, and Fourths';
+        topic = 'Fractions, Decimals & Rational Numbers';
+        learningObjective = 'Partition circles and rectangles into two, three, or four equal shares, and describe as halves, thirds, or fourths.';
+        commonMisconception = 'Thinking that equal area parts of a shape must look identical in shape.';
+        skillsTested = ['shape-partitioning', 'fractional-shares'];
+        prerequisiteConcepts = ['halves-and-fourths'];
+      } else if (category.includes('Measurement') || category.includes('Data')) {
+        standardCode = 'CCSS.Math.Content.2.MD.C.8';
+        lesson = 'Working with Money & Time';
+        topic = 'Measurement & Data';
+        learningObjective = 'Solve word problems involving dollar bills, quarters, dimes, nickels, and pennies.';
+        commonMisconception = 'Treating nickels as worth more than dimes due to their larger physical size.';
+        skillsTested = ['coin-counting', 'money-word-problems'];
+        prerequisiteConcepts = ['skip-counting'];
+      }
+    } else if (grade === 3) {
+      if (category.includes('Number Sense')) {
+        standardCode = 'CCSS.Math.Content.3.NBT.A.1';
+        lesson = 'Rounding to Nearest 10 and 100';
+        topic = 'Number Sense & Place Value';
+        learningObjective = 'Use place value understanding to round whole numbers to the nearest 10 or 100.';
+        commonMisconception = 'Rounding down instead of up when the digit in the ones or tens place is exactly 5.';
+        skillsTested = ['rounding', 'estimation'];
+        prerequisiteConcepts = ['three-digit-place-value'];
+      } else if (category.includes('Operations') || category.includes('Algebra')) {
+        standardCode = 'CCSS.Math.Content.3.OA.A.1';
+        lesson = 'Multiplication & Division Concepts';
+        topic = 'Operations & Algebraic Thinking';
+        learningObjective = 'Interpret products of whole numbers (e.g. 5 x 7 as 5 groups of 7 objects).';
+        commonMisconception = 'Confusing multiplication with addition (e.g. calculating 3 x 4 as 3 + 4 = 7).';
+        skillsTested = ['equal-groups', 'array-multiplication'];
+        prerequisiteConcepts = ['repeated-addition'];
+      } else if (category.includes('Fraction') || category.includes('Rational')) {
+        standardCode = 'CCSS.Math.Content.3.NF.A.2';
+        lesson = 'Understanding Fractions on Number Lines';
+        topic = 'Fractions, Decimals & Rational Numbers';
+        learningObjective = 'Represent a fraction a/b on a number line diagram by marking off length 1/b from 0.';
+        commonMisconception = 'Viewing numerator and denominator as two independent whole numbers rather than a single ratio.';
+        skillsTested = ['number-line-fractions', 'numerator-denominator'];
+        prerequisiteConcepts = ['shape-partitioning'];
+      } else if (category.includes('Measurement') || category.includes('Data')) {
+        standardCode = 'CCSS.Math.Content.3.MD.C.5';
+        lesson = 'Concepts of Area and Perimeter';
+        topic = 'Measurement & Data';
+        learningObjective = 'Understand area as an attribute of plane figures and measure area by counting unit squares.';
+        commonMisconception = 'Confusing perimeter (the outline distance) with area (the interior region).';
+        skillsTested = ['area-measurement', 'perimeter-calculation'];
+        prerequisiteConcepts = ['addition-multiplication'];
+      }
+    } else if (grade === 4) {
+      if (category.includes('Number Sense')) {
+        standardCode = 'CCSS.Math.Content.4.NBT.A.1';
+        lesson = 'Multi-Digit Place Value to 1,000,000';
+        topic = 'Number Sense & Place Value';
+        learningObjective = 'Recognize that in a multi-digit whole number, a digit in one place represents ten times what it represents in the place to its right.';
+        commonMisconception = 'Thinking that a digit has the same value regardless of what column it is placed in.';
+        skillsTested = ['large-number-reading', 'place-value-scaling'];
+        prerequisiteConcepts = ['rounding-to-100'];
+      } else if (category.includes('Operations') || category.includes('Algebra')) {
+        standardCode = 'CCSS.Math.Content.4.NBT.B.5';
+        lesson = 'Multi-Digit Multiplication & Long Division';
+        topic = 'Operations & Algebraic Thinking';
+        learningObjective = 'Multiply a whole number of up to four digits by a one-digit whole number, and find whole-number quotients and remainders.';
+        commonMisconception = 'Ignoring or discarding the remainder in real-world division problems.';
+        skillsTested = ['long-division', 'multi-digit-multiplication'];
+        prerequisiteConcepts = ['multiplication-facts'];
+      } else if (category.includes('Fraction') || category.includes('Rational')) {
+        standardCode = 'CCSS.Math.Content.4.NF.A.1';
+        lesson = 'Equivalent Fractions & Decimal Notation';
+        topic = 'Fractions, Decimals & Rational Numbers';
+        learningObjective = 'Explain why a fraction a/b is equivalent to a fraction (n x a)/(n x b) by using visual fraction models.';
+        commonMisconception = 'Thinking 0.4 is smaller than 0.15 because 4 is smaller than 15 (ignoring place value).';
+        skillsTested = ['equivalent-fractions', 'decimals-to-hundredths'];
+        prerequisiteConcepts = ['number-line-fractions'];
+      } else if (category.includes('Measurement') || category.includes('Data')) {
+        standardCode = 'CCSS.Math.Content.4.MD.C.5';
+        lesson = 'Angles, Lines, and Symmetry';
+        topic = 'Measurement & Data';
+        learningObjective = 'Recognize angles as geometric shapes formed wherever two rays share a common endpoint.';
+        commonMisconception = 'Believing that the size of an angle changes when the lengths of its drawn rays are extended.';
+        skillsTested = ['angle-measurement', 'unit-conversions'];
+        prerequisiteConcepts = ['protractor-use'];
+      }
+    } else if (grade === 5) {
+      if (category.includes('Number Sense')) {
+        standardCode = 'CCSS.Math.Content.5.NBT.A.1';
+        lesson = 'Decimal Place Value and Powers of Ten';
+        topic = 'Number Sense & Place Value';
+        learningObjective = 'Understand decimal place value down to thousandths and use powers of ten exponents.';
+        commonMisconception = 'Thinking that multiplying a decimal by 10^3 means simply appending three zeros (e.g. 1.25 x 10^3 = 1.25000 instead of 1250).';
+        skillsTested = ['powers-of-ten', 'decimal-place-value'];
+        prerequisiteConcepts = ['decimals-to-hundredths'];
+      } else if (category.includes('Operations') || category.includes('Algebra')) {
+        standardCode = 'CCSS.Math.Content.5.NBT.B.7';
+        lesson = 'Multi-Digit Decimal Operations & Order of Operations';
+        topic = 'Operations & Algebraic Thinking';
+        learningObjective = 'Add, subtract, multiply, and divide decimals to hundredths using concrete models or drawings.';
+        commonMisconception = 'Failing to line up the decimal point when adding or subtracting columns.';
+        skillsTested = ['decimal-operations', 'order-of-operations'];
+        prerequisiteConcepts = ['long-division'];
+      } else if (category.includes('Fraction') || category.includes('Rational')) {
+        standardCode = 'CCSS.Math.Content.5.NF.A.1';
+        lesson = 'Adding and Subtracting Fractions with Unlike Denominators';
+        topic = 'Fractions, Decimals & Rational Numbers';
+        learningObjective = 'Add and subtract fractions with unlike denominators by replacing given fractions with equivalent fractions.';
+        commonMisconception = 'Adding the numerators and denominators straight across (e.g. 1/2 + 1/3 = 2/5).';
+        skillsTested = ['unlike-denominators', 'fraction-addition'];
+        prerequisiteConcepts = ['equivalent-fractions'];
+      } else if (category.includes('Measurement') || category.includes('Data')) {
+        standardCode = 'CCSS.Math.Content.5.MD.C.3';
+        lesson = 'Volume Concepts & First Quadrant Coordinate Graphing';
+        topic = 'Measurement & Data';
+        learningObjective = 'Recognize volume as an attribute of solid figures and graph points in the first quadrant of the coordinate plane.';
+        commonMisconception = 'Transposing x and y coordinates when plotting points (e.g., graphing (2, 4) as (4, 2)).';
+        skillsTested = ['volume-measurement', 'coordinate-graphing'];
+        prerequisiteConcepts = ['area-measurement'];
+      }
+    } else if (grade === 6) {
+      if (category.includes('Number Sense')) {
+        standardCode = 'CCSS.Math.Content.6.NS.C.5';
+        lesson = 'Integers & Rational Numbers';
+        topic = 'Number Sense & Place Value';
+        learningObjective = 'Understand positive and negative numbers to represent quantities and place them on rational number lines.';
+        commonMisconception = 'Believing that -10 is greater than -2 because 10 is greater than 2.';
+        skillsTested = ['integers-ordering', 'negative-numbers'];
+        prerequisiteConcepts = ['decimal-place-value'];
+      } else if (category.includes('Operations') || category.includes('Algebra')) {
+        standardCode = 'CCSS.Math.Content.6.EE.A.2';
+        lesson = 'Algebraic Expressions & One-Variable Equations';
+        topic = 'Operations & Algebraic Thinking';
+        learningObjective = 'Write, read, and evaluate expressions in which letters stand for numbers, and solve simple equations.';
+        commonMisconception = 'Interpreting "3x" as thirty-something (e.g. x=5 implies 35) instead of 3 multiplied by x.';
+        skillsTested = ['evaluating-expressions', 'one-variable-equations'];
+        prerequisiteConcepts = ['order-of-operations'];
+      } else if (category.includes('Fraction') || category.includes('Rational') || category.includes('Ratios')) {
+        standardCode = 'CCSS.Math.Content.6.RP.A.1';
+        lesson = 'Understanding Ratios & Unit Rates';
+        topic = 'Fractions, Decimals & Rational Numbers';
+        learningObjective = 'Understand the concept of a ratio and use ratio language to describe a ratio relationship between two quantities.';
+        commonMisconception = 'Confusing part-to-part ratios with part-to-whole fractions.';
+        skillsTested = ['ratio-analysis', 'unit-rates'];
+        prerequisiteConcepts = ['unlike-denominators'];
+      } else if (category.includes('Measurement') || category.includes('Data') || category.includes('Geometry')) {
+        standardCode = 'CCSS.Math.Content.6.G.A.1';
+        lesson = 'Area, Surface Area, Volume & Statistical Distributions';
+        topic = 'Measurement & Data';
+        learningObjective = 'Find area of right triangles, other triangles, and polygons by composing into rectangles or decomposing.';
+        commonMisconception = 'Using the side/slant length instead of the perpendicular vertical height to calculate the area of triangles.';
+        skillsTested = ['area-of-triangles', 'data-distributions'];
+        prerequisiteConcepts = ['volume-measurement'];
+      }
+    } else if (grade === 7) {
+      if (category.includes('Number Sense')) {
+        standardCode = 'CCSS.Math.Content.7.NS.A.1';
+        lesson = 'Operations with Rational Numbers';
+        topic = 'Number Sense & Place Value';
+        learningObjective = 'Apply and extend previous understandings of addition and subtraction to add and subtract rational numbers.';
+        commonMisconception = 'Incorrectly applying signs (e.g., thinking a negative plus a negative is a positive).';
+        skillsTested = ['rational-operations', 'negative-fractions'];
+        prerequisiteConcepts = ['integers-ordering'];
+      } else if (category.includes('Operations') || category.includes('Algebra')) {
+        standardCode = 'CCSS.Math.Content.7.EE.B.4';
+        lesson = 'Multi-Step Linear Equations & Inequalities';
+        topic = 'Operations & Algebraic Thinking';
+        learningObjective = 'Solve word problems leading to equations of the form px + q = r and simple inequalities.';
+        commonMisconception = 'Forgetting to reverse the inequality sign when multiplying or dividing both sides by a negative number.';
+        skillsTested = ['multi-step-equations', 'linear-inequalities'];
+        prerequisiteConcepts = ['one-variable-equations'];
+      } else if (category.includes('Fraction') || category.includes('Rational') || category.includes('Ratios')) {
+        standardCode = 'CCSS.Math.Content.7.RP.A.2';
+        lesson = 'Proportional Relationships & Percents';
+        topic = 'Fractions, Decimals & Rational Numbers';
+        learningObjective = 'Identify and represent proportional relationships between quantities and calculate percentages.';
+        commonMisconception = 'Failing to construct proper equal proportions (e.g., swapping numerators and denominators in ratios).';
+        skillsTested = ['proportional-reasoning', 'percent-equations'];
+        prerequisiteConcepts = ['ratio-analysis'];
+      } else if (category.includes('Measurement') || category.includes('Data') || category.includes('Geometry')) {
+        standardCode = 'CCSS.Math.Content.7.G.B.4';
+        lesson = 'Circle Geometry, Scale Drawings & Sampling';
+        topic = 'Measurement & Data';
+        learningObjective = 'Know the formulas for the area and circumference of a circle and use them to solve problems.';
+        commonMisconception = 'Confusing radius and diameter in circumference and area formulas (e.g., using diameter in pi*r^2).';
+        skillsTested = ['circle-area', 'scale-drawings'];
+        prerequisiteConcepts = ['area-of-triangles'];
+      }
+    } else if (grade === 8) {
+      if (category.includes('Number Sense')) {
+        standardCode = 'CCSS.Math.Content.8.NS.A.1';
+        lesson = 'Real Numbers, Radicals & Exponents';
+        topic = 'Number Sense & Place Value';
+        learningObjective = 'Understand that numbers that are not rational are irrational, and use radical signs and square roots.';
+        commonMisconception = 'Thinking that a negative exponent makes the term negative (e.g., 3^-2 = -9 instead of 1/9).';
+        skillsTested = ['integer-exponents', 'irrational-numbers'];
+        prerequisiteConcepts = ['rational-operations'];
+      } else if (category.includes('Operations') || category.includes('Algebra')) {
+        standardCode = 'CCSS.Math.Content.8.EE.C.8';
+        lesson = 'Solving Systems of Linear Equations';
+        topic = 'Operations & Algebraic Thinking';
+        learningObjective = 'Analyze and solve pairs of simultaneous linear equations, finding intersections.';
+        commonMisconception = 'Believing a system of equations must always have exactly one solution, ignoring parallel line cases.';
+        skillsTested = ['simultaneous-equations', 'linear-systems'];
+        prerequisiteConcepts = ['multi-step-equations'];
+      } else if (category.includes('Fraction') || category.includes('Rational') || category.includes('Ratios') || category.includes('Functions')) {
+        standardCode = 'CCSS.Math.Content.8.F.A.1';
+        lesson = 'Defining and Evaluating Functions';
+        topic = 'Fractions, Decimals & Rational Numbers';
+        learningObjective = 'Understand that a function is a rule that assigns to each input exactly one output.';
+        commonMisconception = 'Assuming all linear-looking graphs represent a valid function without testing inputs.';
+        skillsTested = ['function-definition', 'linear-functions'];
+        prerequisiteConcepts = ['proportional-reasoning'];
+      } else if (category.includes('Measurement') || category.includes('Data') || category.includes('Geometry')) {
+        standardCode = 'CCSS.Math.Content.8.G.B.7';
+        lesson = 'Pythagorean Theorem, Transformations & Sphere/Cone Volume';
+        topic = 'Measurement & Data';
+        learningObjective = 'Apply the Pythagorean Theorem to determine unknown side lengths in right triangles in real-world problems.';
+        commonMisconception = 'Applying the Pythagorean Theorem to triangles that do not contain a 90-degree right angle.';
+        skillsTested = ['pythagorean-theorem', 'geometric-transformations'];
+        prerequisiteConcepts = ['circle-area'];
+      }
+    } else if (grade === 9) {
+      if (category.includes('Number Sense')) {
+        standardCode = 'CCSS.Math.Content.HSN.RN.A.1';
+        lesson = 'Rational Exponents & Radical Expressions';
+        topic = 'Number Sense & Place Value';
+        learningObjective = 'Explain how the definition of the meaning of rational exponents follows from extending the properties of integer exponents.';
+        commonMisconception = 'Mistaking a fractional exponent like x^(1/2) for x/2 instead of square root of x.';
+        skillsTested = ['rational-exponents', 'radical-simplification'];
+        prerequisiteConcepts = ['integer-exponents'];
+      } else if (category.includes('Operations') || category.includes('Algebra')) {
+        standardCode = 'CCSS.Math.Content.HSA.SSE.B.3';
+        lesson = 'Polynomial Operations & Factoring Quadratics';
+        topic = 'Operations & Algebraic Thinking';
+        learningObjective = 'Choose and produce an equivalent form of an expression to reveal and explain properties of the quantity represented.';
+        commonMisconception = 'Forgetting the middle product term when expanding squared binomials (e.g., expanding (x+3)^2 to x^2 + 9).';
+        skillsTested = ['polynomial-operations', 'quadratic-factoring'];
+        prerequisiteConcepts = ['simultaneous-equations'];
+      } else if (category.includes('Fraction') || category.includes('Rational') || category.includes('Ratios') || category.includes('Functions')) {
+        standardCode = 'CCSS.Math.Content.HSF.IF.C.7';
+        lesson = 'Linear, Quadratic, & Exponential Functions';
+        topic = 'Fractions, Decimals & Rational Numbers';
+        learningObjective = 'Graph functions expressed symbolically and show key features of the graph, including intercepts and maximums.';
+        commonMisconception = 'Confusing constant additive growth in linear functions with multiplicative growth in exponential functions.';
+        skillsTested = ['graphing-functions', 'exponential-models'];
+        prerequisiteConcepts = ['function-definition'];
+      } else if (category.includes('Measurement') || category.includes('Data') || category.includes('Geometry')) {
+        standardCode = 'CCSS.Math.Content.HSG.GPE.B.4';
+        lesson = 'Coordinate Geometry Proofs & Statistical Modeling';
+        topic = 'Measurement & Data';
+        learningObjective = 'Use coordinates to prove simple geometric theorems algebraically, and model statistical lines of fit.';
+        commonMisconception = 'Assuming high correlation between two variables implies direct physical causation in statistics.';
+        skillsTested = ['coordinate-proofs', 'regression-analysis'];
+        prerequisiteConcepts = ['pythagorean-theorem'];
+      }
+    }
+  } else {
+    // UK & Europe National Curriculum
+    standardCode = `NC.Math.G${grade}.${category.substring(0, 3).toUpperCase()}`;
+    if (grade === 1) {
+      lesson = 'Place Value within 100 & Number Operations';
+      learningObjective = 'Count to and across 100, forwards and backwards, and solve one-step addition problems.';
+      commonMisconception = 'Confusing teen number naming conventions (e.g. confusing 13 and 30).';
+    } else if (grade === 2) {
+      lesson = 'Mental Calculation Fluency & Partitioning';
+      learningObjective = 'Solve simple subtraction, addition, and money problems up to 100.';
+      commonMisconception = 'Subtracting the smaller digit from the larger digit regardless of order (e.g. 42 - 17 as 35).';
+    } else if (grade === 3) {
+      lesson = 'Multiplication and Division Recall Facts';
+      learningObjective = 'Recall and use multiplication and division facts for the 3, 4 and 8 multiplication tables.';
+      commonMisconception = 'Confusing multiplication of zero with multiplication of one (e.g. 5 x 0 = 5).';
+    } else if (grade === 4) {
+      lesson = 'Equivalent Fractions, Decimals, and Column Methods';
+      learningObjective = 'Recognize and write decimal equivalents of any number of tenths or hundredths.';
+      commonMisconception = 'Failing to adjust place values when performing addition with digits of different decimal positions.';
+    } else if (grade === 5) {
+      lesson = 'Proper Fractions, Percentages, and Metric Measures';
+      learningObjective = 'Add and subtract fractions with denominators that are multiples of the same number.';
+      commonMisconception = 'Failing to convert both fractions to a common denominator before performing operations.';
+    } else if (grade === 6) {
+      lesson = 'Ratio and Proportion, Algebra, and Geometry';
+      learningObjective = 'Solve problems involving the relative sizes of two quantities, algebraic formulas, and areas.';
+      commonMisconception = 'Applying ratio equations without scaling all terms by the same multiplication factor.';
+    } else if (grade === 7) {
+      lesson = 'Integers, Rational arithmetic, and Multi-step equations';
+      learningObjective = 'Apply rational operations to negative quantities and handle multi-step algebraic balances.';
+      commonMisconception = 'Multiplying two negative integers and incorrectly keeping a negative sign in the product.';
+    } else if (grade === 8) {
+      lesson = 'Standard Notation, Indices, and Coordinate Graphs';
+      learningObjective = 'Apply properties of exponents, scientific notation, and find gradients of linear functions.';
+      commonMisconception = 'Interpreting negative indices as representing a negative value instead of division.';
+    } else if (grade === 9) {
+      lesson = 'Quadratic expansions, Simultaneous systems, and Data modelling';
+      learningObjective = 'Expand brackets, factorize trinomials, solve algebraic simultaneous equations, and model statistics.';
+      commonMisconception = 'Expanding (x - 2)(x + 3) with incorrect sum signs (e.g. getting x^2 - x - 6 instead of x^2 + x - 6).';
+    }
+  }
+
+  // Fallbacks
+  if (!lesson) lesson = subcategory || 'Core Math Practice';
+  if (!topic) topic = category;
+  if (!learningObjective) learningObjective = `Fluently evaluate ${subcategory || category} problems.`;
+  if (!solution) solution = String(correctAnswer);
+  if (!stepByStepExplanation) stepByStepExplanation = explanation;
+  if (!commonMisconception) commonMisconception = 'Forgetting to check work or misapplying sequence orders.';
+  if (skillsTested.length === 0) skillsTested = [category.toLowerCase().replace(/\s+/g, '-'), `grade-${grade}`];
+  if (prerequisiteConcepts.length === 0) prerequisiteConcepts = [`foundational-g${grade - 1 || 1}`];
+
+  return {
+    lesson,
+    topic,
+    learningObjective,
+    solution,
+    stepByStepExplanation,
+    commonMisconception,
+    skillsTested,
+    prerequisiteConcepts,
+    standardCode: standardCode || `CCSS.Math.Content.${grade}.${category.substring(0, 2).toUpperCase()}`
   };
 }
 
@@ -1091,45 +1516,57 @@ export function createRandomizedAssessmentPaper(
 ): Question[] {
   const fullPool = generateQuestionPool(grade, curriculum);
   
+  // Deduplicate pool to strictly avoid any duplicate questions by text
+  const seenTexts = new Set<string>();
+  const uniquePool: Question[] = [];
+  fullPool.forEach((q) => {
+    // Normalize question text to detect duplicate concepts / phrased questions
+    const normText = q.text.toLowerCase().replace(/[*_~`#]|<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+    if (!seenTexts.has(normText)) {
+      seenTexts.add(normText);
+      uniquePool.push(q);
+    }
+  });
+
   // Group by category
-  const categories = Array.from(new Set(fullPool.map(q => q.category)));
+  const categories = Array.from(new Set(uniquePool.map(q => q.category)));
   const paper: Question[] = [];
 
-  // US QUESTION DISTRIBUTION (Total 25 questions)
-  // Number Sense: 4, Operations: 5, Fractions: 5, Ratios/Patterns: 3, Measurement: 3, Geometry: 3, Problem Solving: 1, Fluency: 1
+  // US QUESTION DISTRIBUTION (Total 20 questions)
+  // Number Sense: 3, Operations: 4, Fractions: 4, Ratios/Patterns: 3, Measurement: 2, Geometry: 2, Problem Solving: 1, Fluency: 1
   const usDistribution: Record<string, number> = {
-    'Number Sense & Place Value': 4,
-    'Operations & Algebraic Thinking': 5,
-    'Fractions, Decimals & Rational Numbers': 5,
+    'Number Sense & Place Value': 3,
+    'Operations & Algebraic Thinking': 4,
+    'Fractions, Decimals & Rational Numbers': 4,
     'Ratios, Proportions & Functions': 3,
     'Patterns & Pre-Algebra': 3,
-    'Measurement & Data': 3,
-    'Geometry & Spatial Reasoning': 3,
+    'Measurement & Data': 2,
+    'Geometry & Spatial Reasoning': 2,
     'Problem Solving & Mathematical Reasoning': 1,
     'Mathematical Fluency': 1
   };
 
-  // UK QUESTION DISTRIBUTION (Total 25 questions)
-  // Grades 1-5: Number Sense: 4, Operations: 5, Fractions: 4, Measurement: 4, Geometry: 4, Statistics: 2, Problem Solving: 1, Fluency: 1
+  // UK QUESTION DISTRIBUTION (Total 20 questions)
+  // Grades 1-5: Number Sense: 3, Operations: 4, Fractions: 3, Measurement: 3, Geometry: 3, Statistics: 2, Problem Solving: 1, Fluency: 1
   const ukPrimaryDistribution: Record<string, number> = {
-    'Number Sense & Place Value': 4,
-    'Number Operations & Algebra': 5,
-    'Fractions, Decimals & Percentages': 4,
-    'Measurement & Applied Mathematics': 4,
-    'Geometry & Spatial Reasoning': 4,
+    'Number Sense & Place Value': 3,
+    'Number Operations & Algebra': 4,
+    'Fractions, Decimals & Percentages': 3,
+    'Measurement & Applied Mathematics': 3,
+    'Geometry & Spatial Reasoning': 3,
     'Statistics & Probability': 2,
     'Problem Solving & Proof': 1,
     'Mathematical Fluency': 1
   };
 
-  // Grades 6-9: Number Sense: 3, Operations: 5, Fractions: 4, Measurement: 3, Geometry: 4, Statistics: 3, Problem Solving: 2, Fluency: 1
+  // Grades 6-9: Number Sense: 3, Operations: 4, Fractions: 3, Measurement: 2, Geometry: 3, Statistics: 2, Problem Solving: 2, Fluency: 1
   const ukSecondaryDistribution: Record<string, number> = {
     'Number Sense & Place Value': 3,
-    'Number Operations & Algebra': 5,
-    'Fractions, Decimals & Percentages': 4,
-    'Measurement & Applied Mathematics': 3,
-    'Geometry & Spatial Reasoning': 4,
-    'Statistics & Probability': 3,
+    'Number Operations & Algebra': 4,
+    'Fractions, Decimals & Percentages': 3,
+    'Measurement & Applied Mathematics': 2,
+    'Geometry & Spatial Reasoning': 3,
+    'Statistics & Probability': 2,
     'Problem Solving & Proof': 2,
     'Mathematical Fluency': 1
   };
@@ -1139,8 +1576,8 @@ export function createRandomizedAssessmentPaper(
     : (grade <= 5 ? ukPrimaryDistribution : ukSecondaryDistribution);
 
   categories.forEach((cat) => {
-    const qty = activeDistribution[cat] || 3;
-    const catPool = fullPool.filter(q => q.category === cat);
+    const qty = activeDistribution[cat] || 2;
+    const catPool = uniquePool.filter(q => q.category === cat);
 
     // Filter by difficulty in the pool
     const easyPool = catPool.filter(q => q.difficulty === 'Easy');
@@ -1164,13 +1601,36 @@ export function createRandomizedAssessmentPaper(
     }
 
     // Shuffle each difficulty pool to get randomized selections
-    const shuffledEasy = shuffleArray(easyPool).slice(0, easyQty);
-    const shuffledMed = shuffleArray(medPool).slice(0, medQty);
-    const shuffledHard = shuffleArray(hardPool).slice(0, hardQty);
+    const selectedEasy = shuffleArray(easyPool).slice(0, easyQty);
+    const selectedMed = shuffleArray(medPool).slice(0, medQty);
+    const selectedHard = shuffleArray(hardPool).slice(0, hardQty);
+
+    let catSelected = [...selectedEasy, ...selectedMed, ...selectedHard];
+
+    // If we didn't get enough questions for this category because a pool was small,
+    // fill in from other available difficulties of the same category
+    if (catSelected.length < qty) {
+      const selectedIds = new Set(catSelected.map(q => q.id));
+      const remainingInCat = shuffleArray(catPool.filter(q => !selectedIds.has(q.id)));
+      const fillQty = qty - catSelected.length;
+      catSelected.push(...remainingInCat.slice(0, fillQty));
+    }
 
     // Add them to our paper
-    paper.push(...shuffledEasy, ...shuffledMed, ...shuffledHard);
+    paper.push(...catSelected);
   });
+
+  // Ensure overall paper has exactly 20 questions
+  if (paper.length > 20) {
+    // Shuffle and slice to 20
+    const shuffledPaper = shuffleArray(paper);
+    return shuffledPaper.slice(0, 20);
+  } else if (paper.length < 20) {
+    const paperIds = new Set(paper.map(q => q.id));
+    const extraCandidates = shuffleArray(uniquePool.filter(q => !paperIds.has(q.id)));
+    const needed = 20 - paper.length;
+    paper.push(...extraCandidates.slice(0, needed));
+  }
 
   // Finally, shuffle the overall question order to guarantee no repeated paper format
   return shuffleArray(paper);
